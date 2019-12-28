@@ -44,7 +44,7 @@ query MyQuery {
   }
 }
 """ % (year)
-    r = run_query(query)
+    r = run_query(query)["data"]["legco_BudgetQMeeting"]
     return jsonify(r)
 
 
@@ -64,7 +64,7 @@ query MyQuery {
     engagement {
       engagement
     }
-    Individual {
+    member: Individual {
       id
       name_ch
       image
@@ -72,24 +72,25 @@ query MyQuery {
   }
 }
 """
-    r = run_query(query)
+    r = run_query(query)["data"]["legco_IndividualNews"]
     news = {}
     engagement = {}
     for j in r:
+        print(j)
         orig_news = j["News"]
         key = orig_news["key"]
         engagement = j["engagement"]
         if key not in news:
             news[key] = {}
-            news[key]["individuals"] = []
+            news[key]["members"] = []
         news[key].update(engagement)   
         news[key].update(orig_news)   
     
     for j in r:
         orig_news = j["News"]
         key = orig_news["key"]
-        individual = j["Individual"]
-        news[key]["individuals"].append(individual)       
+        individual = j["member"]
+        news[key]["members"].append(individual)       
     output = sorted([v for k, v in news.items()], key=lambda x: x["engagement"], reverse=True)[0:10]
     return jsonify(output)
 
@@ -110,7 +111,7 @@ query MyQuery {
   }
 }
 """ % (member)
-    r = run_query(query)
+    r = [r["News"] for r in run_query(query)["data"]["legco_IndividualNews"]]
     return jsonify(r)
 
 
@@ -130,5 +131,5 @@ query MyQuery {
   }
 }
 """ % (name_ch)
-    r = run_query(query)
+    r = [r["News"] for r in run_query(query)["data"]["legco_IndividualNews"]]
     return jsonify(r)
