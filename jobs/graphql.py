@@ -3,11 +3,9 @@ import json
 import os
 
 
-ADMIN_SECRET = os.getenv('ADMIN_SECRET')
-ENDPOINT = os.getenv('ENDPOINT')
-
 def run_query(query):
-
+    ADMIN_SECRET = os.getenv('ADMIN_SECRET')
+    ENDPOINT = os.getenv('ENDPOINT')
     HEADERS = {
         'Content-Type': 'application/json',
         'X-Hasura-Admin-Secret': ADMIN_SECRET,
