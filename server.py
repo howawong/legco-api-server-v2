@@ -3,6 +3,11 @@ import requests
 import click
 import datetime
 from .jobs import *
+import os
+from dotenv import find_dotenv, load_dotenv
+
+dotenv_path = os.path.join(os.path.dirname(__file__), '.env')
+load_dotenv(dotenv_path)
 
 app = Flask(__name__)
 
@@ -19,12 +24,6 @@ def fetch_apple_daily(rundate):
     before = before.strftime("%Y-%m-%d")
     print("Updating like counts from %s" % (before))
     update_news_like_count(before)   
-
-def run_query(query):
-    data = {"query": query, "operationName":"MyQuery"}
-    r = requests.post("https://api2.vote4.hk/v1/graphql", json=data)
-    k, v = r.json()["data"].popitem()
-    return v
 
 
 @app.route("/budget/meeting/<int:year>/")
