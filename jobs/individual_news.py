@@ -25,7 +25,7 @@ def update_individual_news(news):
 
     news_individual = '[' +  ','.join(['{news: "%s", individual: %d}' % (p[0], p[1]) for p in pairs ]) + ']'
     news_individual_query = """
-      mutation IndividualNewsMutation {
+      mutation MyQuery {
         insert_legco_IndividualNews(
           objects: %s,
           on_conflict: {constraint: IndividualNews_pkey,update_columns: []}
@@ -35,5 +35,5 @@ def update_individual_news(news):
       }
     """ % (news_individual)
 
-    run_query(news_individual_query)
+    return run_query(news_individual_query)
 

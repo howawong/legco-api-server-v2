@@ -15,7 +15,7 @@ def upsert_news(news):
     news_objects = ",\n".join([template.format(**article) for article in news])
     news_objects = "[%s]" % news_objects
     query = """
-      mutation NewsMutation {
+      mutation MyQuery {
         insert_legco_News(
           objects: %s,
           on_conflict: {constraint: News_pkey,update_columns: []}
@@ -26,4 +26,4 @@ def upsert_news(news):
     """ % (news_objects)
 
 
-    run_query(query)
+    return run_query(query)
