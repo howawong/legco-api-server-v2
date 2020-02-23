@@ -133,3 +133,102 @@ query MyQuery {
 """ % (name_ch)
     r = [r["News"] for r in run_query(query)["data"]["legco_IndividualNews"]]
     return jsonify(r)
+
+@app.route("/legco/member/<int:member_id>/")
+def member_statistics(member_id):
+    year = 2016
+    start_date = "2018-05-01"
+    query = \
+"""
+query MyQuery {
+  legco_IndividualVote(where: {individual: {_eq: %d}, Meeting: {date: {_gte: "%s"}}}, order_by: {Meeting: {date: asc}}) {
+    Meeting {
+      id
+      date
+      meeting_type
+    }
+    vote_number
+    result
+  }
+  legco_Individual(where: {id: {_eq: %d}}) {
+    image
+    name_ch
+    name_en
+    Party {
+      name_ch
+      name_en
+      name_short_ch
+      name_short_en
+      id
+      image
+    }
+  }
+  legco_CouncilMembers(where: {Individual: {id: {_eq: %d}}, Council: {start_year: {_eq: %d}}}) {
+    disqualified
+    id
+    member
+    membership_type
+    Council {
+      start_year
+    }
+    CouncilMembershipType {
+      category
+      id
+      sub_category
+    }
+  }
+}
+""" % (member_id, start_date, member_id, member_id, year)
+    data = run_query(query)["data"]
+    votes = data["legco_IndividualVote"]
+    votes = [{
+        "date": vote["Meeting"]["date"][0:-3] + "-01 00:00:00",
+        "result": vote["result"],
+        "vote_number": vote["vote_number"],
+        "meeting": vote["Meeting"]["id"]
+
+    } for vote in votes]
+    summary = {}
+    for vote in votes:
+        d = vote["date"]
+        result = vote["result"]
+        if d not in summary:
+            summary[d] = {}
+        summary[d][result] = summary[d].get(result, 0) + 1
+    vote_rate = [
+        {d:{
+            'vote_count': stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0),
+            'no_vote_count': stats.get('ABSTAIN', 0) + stats.get('ABSENT', 0)
+        }}
+     for d, stats in summary.items()]
+
+    vote_rate = [
+        {d:{
+            'vote_count': stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0),
+            'no_vote_count': stats.get('ABSTAIN', 0) + stats.get('ABSENT', 0)
+        }}
+     for d, stats in summary.items()]
+
+    attendance_rate = [
+        {d:{
+            'present_count': stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0) + stats.get('ABSTAIN', 0),
+            'absent_count': stats.get('ABSENT', 0)
+        }}
+     for d, stats in summary.items()]
+
+
+    individual = data["legco_Individual"][0]
+    council_member = data["legco_CouncilMembers"][0]
+    votes_by_month = {}
+    output = {}
+    output = {}
+    output["id"] = member_id
+    output["name_zh"] = individual["name_ch"]
+    output["name_en"] = individual["name_en"]
+    output["avatar"] = individual["image"]
+    output["constituency_type"] = council_member["CouncilMembershipType"]["category"]
+    output["constituency_district"] = council_member["CouncilMembershipType"]["sub_category"]
+    output["political_affiliation"] = individual["Party"]["name_short_ch"]
+    output["attendance_rate"] = attendance_rate
+    output["vote_rate"] = vote_rate
+    return jsonify(output)
