@@ -160,7 +160,6 @@ def upsert_records(schema, table, records, returning_keys=[], update_columns=[])
         line = "            {0}:{1}{{{0}}}{1}".format(key, "\"" if type(value) == str else "")
         template += line + ",\n"
     template += "           }}"
-    print(template)
     records = ",\n".join([template.format(**r) for r in records])
     records = "[%s]" % records
     returning = "\n".join(returning_keys)
@@ -178,7 +177,6 @@ mutation MyQuery {
   }
 }
 """ % (schema, table, records, table, update, returning)
-    print(query)
     return run_query(query)
 
 
