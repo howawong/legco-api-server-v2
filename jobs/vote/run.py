@@ -135,7 +135,7 @@ def upsert_records(schema, table, records, returning_keys=[], update_columns=[])
         line = "            {0}:{1}{{{0}}}{1}".format(key, "\"" if type(value) == str else "")
         template += line + ",\n"
     template += "           }}"
-    print(template)
+    #print(template)
     records = ",\n".join([template.format(**r) for r in records])
     records = "[%s]" % records
     returning = "\n".join(returning_keys)
@@ -153,7 +153,7 @@ mutation MyQuery {
   }
 }
 """ % (schema, table, records, table, update, returning)
-    print(query)
+    #print(query)
     return run_query(query)
 
 
@@ -194,7 +194,7 @@ def crawl(year=0):
         for mc in meeting_types:
             detect_url = detect_url_format % (yr, mc)
             r = requests.get(detect_url)
-            print(detect_url)
+            #print(detect_url)
             xml_files = [f for f in r.text.split(",") if f.endswith(".xml")]
             for xml_file in xml_files:
                 output.append(url_format[mc] % (yr) + xml_file)
@@ -209,7 +209,7 @@ def upsert_meetings(meetings, mapping):
             meeting_key = 'insert_%s_%s' % (schema, meeting_table) 
             summary = result_data[meeting_key]
             affected_rows = summary["affected_rows"]
-            print(summary)
+            #print(summary)
             if affected_rows == 0:
                 print("%s Already existed." % (meeting["source_url"]))
             meeting_id = get_id_from_result(summary)
@@ -219,9 +219,9 @@ def upsert_meetings(meetings, mapping):
                 motion["vote_number"] = vote["vote_number"]
                 upsert_records(schema, motion_table, [motion], ["meeting", "vote_number"])
                 vote["meeting"] = meeting_id
-                print(vote)
+                #print(vote)
                 vote_result = upsert_records(schema, vote_table, [vote], ["meeting", "vote_number"])
-                print(vote_result)
+                #print(vote_result)
                 vote_result_data = vote_result.get("data", None)
                 vote_key = 'insert_%s_%s' % (schema, vote_table) 
                 vote_summary["vote_number"] = vote["vote_number"]
@@ -233,7 +233,7 @@ def upsert_meetings(meetings, mapping):
                     individual_vote["meeting"] = vote["meeting"]
                     individual_vote["individual"] = mapping.get(individual_vote["name_ch"], -1) 
                 print(upsert_records(schema, individual_vote_table, individual_votes, ["vote_number", "individual", "meeting"], ["individual"]))
-                print(vote_summary_result)
+                #print(vote_summary_result)
             print("Meeting ID: %d" % meeting_id)
         else:
             print(result)
@@ -242,5 +242,5 @@ mapping = get_individuals()
 urls = crawl(2017) + crawl(2016)   
 for url in urls:
     meetings = get_records_from_url(url)
-    print(meetings)
+    #print(meetings)
     upsert_meetings(meetings, mapping)
