@@ -134,6 +134,114 @@ query MyQuery {
     r = [r["News"] for r in run_query(query)["data"]["legco_IndividualNews"]]
     return jsonify(r)
 
+@app.route("/legco/members/")
+def all_members_statistics():
+    year = 2016
+    start_date = "2019-05-01"
+    query = \
+"""
+query MyQuery {
+  legco_IndividualVote(where: {Meeting: {date: {_gte: "%s"}}}, order_by: {Meeting: {date: asc}}) {
+    Meeting {
+      id
+      date
+      meeting_type
+    }
+    individual
+    vote_number
+    result
+  }
+  legco_Individual {
+    id
+    image
+    name_ch
+    name_en
+    Party {
+      name_ch
+      name_en
+      name_short_ch
+      name_short_en
+      id
+      image
+    }
+  }
+  legco_CouncilMembers(where: {Council: {start_year: {_eq: %d}}}) {
+    disqualified
+    id
+    member
+    membership_type
+    Council {
+      start_year
+    }
+    CouncilMembershipType {
+      category
+      id
+      sub_category
+    }
+  }
+}
+""" % (start_date, year)
+    votes = data["legco_IndividualVote"]
+    individuals = data["legco_Individual"]
+    council_members = data["legco_CouncilMembers"]
+    output = {}
+    
+    # Fill in data from legco_CouncilMembers
+    for council_member in council_members:
+        output[council_member["member"]] = {
+            "id": council_member["member"],
+            "constituency_type": council_member["CouncilMembershipType"]["category"],
+            "constituency_district": council_member["CouncilMembershipType"]["sub_category"],
+        }
+    
+    # Fill in data from legco_Individual
+    for individual in individuals:
+        if individual[id] in output:
+            output[individual["id"]].update({
+                "id": individual["id"],
+                "name_zh": individual["name_ch"],
+                "name_en": individual["name_en"],
+                "avatar": individual["image"],
+                "political_affiliation": individual["Party"]["name_short_ch"] if individual["Party"] else None,
+            })
+    
+    # Generate vote_summary from legco_IndividualVote
+    vote_summary = {}
+    for vote in votes:
+        d = vote["Meeting"]["date"][0:-3] + "-01 00:00:00"
+        meeting = vote["Meeting"]["id"]
+        result = vote["result"]
+        vote_number = vote["vote_number"]
+        individual = vote["individual"]
+        if individual not in vote_summary:
+            vote_summary[individual] = {}
+        if d not in vote_summary[individual]:
+            vote_summary[individual][d] = {}
+        vote_summary[individual][d][result] = vote_summary[individual][d].get(result, 0) + 1
+    
+    # Fill in data from vote_summary
+    for i in output:
+        if not vote_summary.get(i, {}):
+            output[i]['vote_rate'] = []
+            output[i]['attendance_rate'] = []
+        else:
+            d = max(vote_summary[i])
+            stats = vote_summary[i][d]
+            output[i]['vote_rate'] = [
+                {d:{
+                    'vote_count': stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0),
+                    'no_vote_count': stats.get('ABSTAIN', 0) + stats.get('ABSENT', 0)
+                }}
+            ]
+            output[i]['attendance_rate'] = [
+                {d:{
+                    'present_count': stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0) + stats.get('ABSTAIN', 0),
+                    'absent_count': stats.get('ABSENT', 0)
+                }}
+            ]
+    
+    return jsonify(output)
+
 @app.route("/legco/member/<int:member_id>/")
 def member_statistics(member_id):
     year = 2016
@@ -202,13 +310,6 @@ query MyQuery {
         }}
      for d, stats in summary.items()]
 
-    vote_rate = [
-        {d:{
-            'vote_count': stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0),
-            'no_vote_count': stats.get('ABSTAIN', 0) + stats.get('ABSENT', 0)
-        }}
-     for d, stats in summary.items()]
-
     attendance_rate = [
         {d:{
             'present_count': stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0) + stats.get('ABSTAIN', 0),
@@ -221,7 +322,6 @@ query MyQuery {
     council_member = data["legco_CouncilMembers"][0]
     votes_by_month = {}
     output = {}
-    output = {}
     output["id"] = member_id
     output["name_zh"] = individual["name_ch"]
     output["name_en"] = individual["name_en"]
@@ -231,4 +331,29 @@ query MyQuery {
     output["political_affiliation"] = individual["Party"]["name_short_ch"]
     output["attendance_rate"] = attendance_rate
     output["vote_rate"] = vote_rate
+    return jsonify(output)
+
+@app.route("/legco/bill_categories/")
+def bill_categories():
+    data = [
+        #(1, '司法及法律', 'Administration of Justice and Legal Services', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
+        #(2, '工商', 'Commerce and Industry', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
+        #(3, '政制', 'Constitutional Affairs', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
+        #(4, '發展', 'Development', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
+        #(5, '經濟發展', 'Economic Development', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
+        #(6, '教育', 'Education', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
+        #(7, '環境', 'Environmental Affairs', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
+        #(8, '財經', 'Financial Affairs', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
+        #(9, '食物安全及環境衞生', 'Food Safety and Environmental Hygiene', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
+        #(10, '衞生', 'Health Services', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
+        #(11, '民政', 'Home Affairs', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
+        #(12, '房屋', 'Housing', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
+        #(13, '資訊科技及廣播', 'Information Technology and Broadcasting', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
+        #(14, '人力', 'Manpower', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
+        #(15, '公務員及資助機構員工', 'Public Service', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
+        #(16, '保安', 'Security', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
+        #(17, '交通', 'Transport', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
+        #(18, '福利', 'Welfare Services', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png')
+    ]
+	output = [{'id': d[0], 'title_zh': d[1], 'title_en': d[2], 'avatar': d[3]} for d in data]
     return jsonify(output)
