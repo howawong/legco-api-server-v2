@@ -330,6 +330,16 @@ query MyQuery {
         }}
      for d, stats in summary.items()]
 
+    voteRate = [
+        {d:(stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0))/ (stats.get('ABSTAIN', 0) + stats.get('ABSENT', 0)+stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0))
+        }
+     for d, stats in summary.items()]
+
+      attendanceRate = [
+        {d: 100 - stats.get('ABSENT', 0) /(stats.get('ABSTAIN', 0) + stats.get('ABSENT', 0)+stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0))
+        }
+     for d, stats in summary.items()]
+
 
     individual = data["legco_Individual"][0]
     council_member = data["legco_CouncilMembers"][0]
@@ -343,6 +353,9 @@ query MyQuery {
     output["political_affiliation"] = individual["Party"]["name_short_ch"]
     output["attendance_rate"] = attendance_rate
     output["vote_rate"] = vote_rate
+    # attendanceRate and voteRate are in %
+    output["attendanceRate"] = attendanceRate
+    output["voteRate"] = voteRate
     return jsonify(output)
 
 @app.route("/legco/bill_categories/")
