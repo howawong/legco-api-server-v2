@@ -134,8 +134,20 @@ query MyQuery {
     r = [r["News"] for r in run_query(query)["data"]["legco_IndividualNews"]]
     return jsonify(r)
 
-@app.route("/legco/members/")
-def all_members_statistics():
+@app.route("/legco/members/", defaults={'sortkey': 'id', 'sortorder': 'asc'})
+@app.route("/legco/members/<string:sortkey>/", defaults={'sortorder': 'asc'})
+@app.route("/legco/members/<string:sortkey>/<string:sortorder/")
+def all_members_statistics(sortkey, sortorder):
+    search_functions = {
+        'id': lambda member: member['id'],
+        'name_zh': lambda member: member['name_zh'],
+        'vote_rate': lambda member: list(member['vote_rate'][0].values())[0]['vote_count'],
+        'attendance_rate': lambda member: list(member['attendance_rate'][0].values())[0]['present_count'],
+    }
+    if sortkey not in search_functions:
+        return jsonify({})
+    elif sortorder not in ['asc', 'desc']:
+        return jsonify({})
     year = 2016
     start_date = "2019-05-01"
     query = \
@@ -181,14 +193,15 @@ query MyQuery {
   }
 }
 """ % (start_date, year)
+    data = run_query(query)["data"]
     votes = data["legco_IndividualVote"]
     individuals = data["legco_Individual"]
     council_members = data["legco_CouncilMembers"]
-    output = {}
+    members_statistics = {}
     
     # Fill in data from legco_CouncilMembers
     for council_member in council_members:
-        output[council_member["member"]] = {
+        members_statistics[council_member["member"]] = {
             "id": council_member["member"],
             "constituency_type": council_member["CouncilMembershipType"]["category"],
             "constituency_district": council_member["CouncilMembershipType"]["sub_category"],
@@ -196,8 +209,8 @@ query MyQuery {
     
     # Fill in data from legco_Individual
     for individual in individuals:
-        if individual[id] in output:
-            output[individual["id"]].update({
+        if individual[id] in members_statistics:
+            members_statistics[individual["id"]].update({
                 "id": individual["id"],
                 "name_zh": individual["name_ch"],
                 "name_en": individual["name_en"],
@@ -209,9 +222,9 @@ query MyQuery {
     vote_summary = {}
     for vote in votes:
         d = vote["Meeting"]["date"][0:-3] + "-01 00:00:00"
-        meeting = vote["Meeting"]["id"]
+        # meeting = vote["Meeting"]["id"]
         result = vote["result"]
-        vote_number = vote["vote_number"]
+        # vote_number = vote["vote_number"]
         individual = vote["individual"]
         if individual not in vote_summary:
             vote_summary[individual] = {}
@@ -220,26 +233,26 @@ query MyQuery {
         vote_summary[individual][d][result] = vote_summary[individual][d].get(result, 0) + 1
     
     # Fill in data from vote_summary
-    for i in output:
+    for i in members_statistics:
         if not vote_summary.get(i, {}):
-            output[i]['vote_rate'] = []
-            output[i]['attendance_rate'] = []
+            members_statistics[i]['vote_rate'] = []
+            members_statistics[i]['attendance_rate'] = []
         else:
             d = max(vote_summary[i])
             stats = vote_summary[i][d]
-            output[i]['vote_rate'] = [
+            members_statistics[i]['vote_rate'] = [
                 {d:{
                     'vote_count': stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0),
                     'no_vote_count': stats.get('ABSTAIN', 0) + stats.get('ABSENT', 0)
                 }}
             ]
-            output[i]['attendance_rate'] = [
+            members_statistics[i]['attendance_rate'] = [
                 {d:{
                     'present_count': stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0) + stats.get('ABSTAIN', 0),
                     'absent_count': stats.get('ABSENT', 0)
                 }}
             ]
-    
+    output = sorted(members_statistics.values(), key = search_functions.get(sortkey), reverse = sortorder == 'desc')
     return jsonify(output)
 
 @app.route("/legco/member/<int:member_id>/")
@@ -320,7 +333,6 @@ query MyQuery {
 
     individual = data["legco_Individual"][0]
     council_member = data["legco_CouncilMembers"][0]
-    votes_by_month = {}
     output = {}
     output["id"] = member_id
     output["name_zh"] = individual["name_ch"]
@@ -355,5 +367,5 @@ def bill_categories():
         #(17, '交通', 'Transport', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png'),
         #(18, '福利', 'Welfare Services', 'https://upload.wikimedia.org/wikipedia/commons/thumb/a/ac/No_image_available.svg/480px-No_image_available.svg.png')
     ]
-	output = [{'id': d[0], 'title_zh': d[1], 'title_en': d[2], 'avatar': d[3]} for d in data]
+    output = [{'id': d[0], 'title_zh': d[1], 'title_en': d[2], 'avatar': d[3]} for d in data]
     return jsonify(output)
