@@ -12,7 +12,7 @@ from pdfminer.pdfpage import PDFPage
 from pdfminer.pdfinterp import PDFResourceManager
 from pdfminer.pdfinterp import PDFPageInterpreter
 from pdfminer.converter import PDFPageAggregator
-
+from urllib.parse import urljoin
 
 
 def get_memory():
@@ -87,6 +87,12 @@ def upsert_records(schema, table, records, returning_keys=[], update_columns=[])
         template += line + ",\n"
     template += "           }}"
     #print(template)
+    for r in records:
+        for k in r.keys():
+            v = r[k]
+            if type(v) == bool:
+                v = str(v).lower()
+                r[k] = v
     records = ",\n".join([template.format(**r) for r in records])
     records = "[%s]" % records
     returning = "\n".join(returning_keys)
@@ -104,7 +110,6 @@ mutation MyQuery {
   }
 }
 """ % (schema, table, records, table, update, returning)
-    #print(query)
     return run_query(query)
 
 
@@ -118,6 +123,19 @@ mutation MyQuery {
 """ % (internal_key)
     #print(query)
     return run_query(query)
+
+def delete_meeting_by_internal_key(internal_key):
+    query = """
+mutation MyQuery {
+  delete_legco_BillMeeting(where: {internal_key: {_eq: "%s"}}) {
+    affected_rows
+  }
+}
+""" % (internal_key)
+    #print(query)
+    return run_query(query)
+
+
 
 def strip_value(d):
     for k in d.keys():
@@ -159,6 +177,9 @@ def get_bill_content(bill):
     started = True
     end = False
     desc = ""
+
+
+
     for page in pages:
         if end:
             break
@@ -175,11 +196,55 @@ def get_bill_content(bill):
                 texts.append((x, y, text))
         texts = sorted(texts, key = lambda x: (-x[1], x[0]))
         page_text = "".join([x[2].strip() for x in texts])
+        page_text = page_text.replace("\r", "")
+        page_text = page_text.replace("\n", "")
         m = re.match(r'(.*)旨在(.*)(由立法會制(定|訂)。|弁言)', page_text)
         if m is not None:
             desc = m.group(2)
     return desc
 
+
+def get_committee_meetings(url, key):
+    def get_href_from_td(cell, parent):
+        href = ""
+        if cell is not None:
+            a = cell.find("a")
+            if a is not None:
+                href = a.get("href", "").strip()
+                if href != "":
+                    href = urljoin(parent, href)
+        return href
+
+    output = []
+    url = url.strip()
+    if url != "":
+        r = requests.get(url)
+        soup = BeautifulSoup(r.content, 'html.parser', parse_only=SoupStrainer("table", {"class": "interlaced"}))
+        table = soup.find("table")
+        if table is not None:
+            for row in table.find_all("tr")[1:]:
+                cells = row.find_all("td")
+                date_text = cells[0].text.strip().replace(" ", "")
+                date = date_text.split("日")[0].replace("年", "-").replace("月", "-").replace("日", "").replace("取消", "")
+                cancelled = "取消" in date_text
+                p = [int(x) for x in date.split("-")]
+                date = "%d-%.2d-%.2d" % (p[0], p[1], p[2])
+                agenda = get_href_from_td(cells[1], url)
+                
+                att = get_href_from_td(cells[2], url)
+                minutes = get_href_from_td(cells[3], url)
+                record = {"internal_key": key, "date": date, "agenda": agenda, "attendance": att, "minutes": minutes, "cancelled": cancelled}
+                output.append(record)
+    return output
+
+
+bill_keys = ["internal_key","ordinance_title_eng","ordinance_title_chi","ordinance_content_url_eng","ordinance_content_url_chi","bill_title_eng","bill_title_chi","proposed_by_eng","proposed_by_chi","bill_gazette_date","bill_content_url_eng","bill_content_url_chi","bill_gazette_date_2","bill_content_url_2_eng","bill_content_url_2_chi","bill_gazette_date_3","bill_content_url_3_eng","bill_content_url_3_chi","ordinance_gazette_date","ordinance_year_number_eng","ordinance_year_number_chi","ordinace_gazette_content_url_eng","ordinance_gazette_content_url_chi","legco_brief_file_reference","legco_brief_url_eng","legco_brief_url_chi","additional_information_eng","additional_information_chi","remarks_eng","remarks_chi"]
+
+bill_committee_keys = ["internal_key","bills_committee_title_eng","bills_committee_title_chi","bills_committee_url_eng","bills_committee_url_chi","bills_committee_formation_date","bills_committee_report_url_eng","bills_committee_report_url_chi"]
+
+bill_reading_keys = ["internal_key","first_reading_date","first_reading_date_hansard_url_eng","first_reading_date_hansard_url_chi","first_reading_date_2","first_reading_date_2_hansard_url_eng","first_reading_date_2_hansard_url_chi","second_reading_date","second_reading_date_hansard_url_eng","second_reading_date_hansard_url_chi","second_reading_date_2","second_reading_date_2_hansard_url_eng","second_reading_date_2_hansard_url_chi","second_reading_date_3","second_reading_date_3_hansard_url_eng","second_reading_date_3_hansard_url_chi","second_reading_date_4","second_reading_date_4_hansard_url_eng","second_reading_date_4_hansard_url_chi","second_reading_date_5","second_reading_date_5_hansard_url_eng","second_reading_date_5_hansard_url_chi","third_reading_date","third_reading_date_hansard_url_eng","third_reading_date_hansard_url_chi"]
+
+bill_meeting_keys = ["date", "agenda", "attendance", "minutes"]
 
 def get_bills(mapping, year):
     r = requests.get("https://app.legco.gov.hk/BillsDB/odata/Vbills?$filter=year(bill_gazette_date)%20eq%20" + str(year))
@@ -189,34 +254,41 @@ def get_bills(mapping, year):
     committees = []
     committee_members = []
     descriptions = []
+    all_meetings = []
     for raw_bill in raw_bills:
-        bill = {k: raw_bill[k] for k in raw_bill.keys() if k in ["internal_key","ordinance_title_eng","ordinance_title_chi","ordinance_content_url_eng","ordinance_content_url_chi","bill_title_eng","bill_title_chi","proposed_by_eng","proposed_by_chi","bill_gazette_date","bill_content_url_eng","bill_content_url_chi","bill_gazette_date_2","bill_content_url_2_eng","bill_content_url_2_chi","bill_gazette_date_3","bill_content_url_3_eng","bill_content_url_3_chi","ordinance_gazette_date","ordinance_year_number_eng","ordinance_year_number_chi","ordinace_gazette_content_url_eng","ordinance_gazette_content_url_chi","legco_brief_file_reference","legco_brief_url_eng","legco_brief_url_chi","additional_information_eng","additional_information_chi","remarks_eng","remarks_chi"]}
+        bill = {k: raw_bill[k] for k in raw_bill.keys() if k in bill_keys}
         bill = strip_value(bill)
-        bill_committee =  {k: raw_bill[k] for k in raw_bill.keys() if k in ["internal_key","bills_committee_title_eng","bills_committee_title_chi","bills_committee_url_eng","bills_committee_url_chi","bills_committee_formation_date","bills_committee_report_url_eng","bills_committee_report_url_chi"]} 
+        bill_committee =  {k: raw_bill[k] for k in raw_bill.keys() if k in bill_committee_keys}
         bill_committee = strip_value(bill_committee)
-        bill_reading =  {k: raw_bill[k] for k in raw_bill.keys() if k in ["internal_key","first_reading_date","first_reading_date_hansard_url_eng","first_reading_date_hansard_url_chi","first_reading_date_2","first_reading_date_2_hansard_url_eng","first_reading_date_2_hansard_url_chi","second_reading_date","second_reading_date_hansard_url_eng","second_reading_date_hansard_url_chi","second_reading_date_2","second_reading_date_2_hansard_url_eng","second_reading_date_2_hansard_url_chi","second_reading_date_3","second_reading_date_3_hansard_url_eng","second_reading_date_3_hansard_url_chi","second_reading_date_4","second_reading_date_4_hansard_url_eng","second_reading_date_4_hansard_url_chi","second_reading_date_5","second_reading_date_5_hansard_url_eng","second_reading_date_5_hansard_url_chi","third_reading_date","third_reading_date_hansard_url_eng","third_reading_date_hansard_url_chi"]}
+        bill_reading =  {k: raw_bill[k] for k in raw_bill.keys() if k in bill_reading_keys}
         bill_reading = strip_value(bill_reading)
         member_names = get_bill_committee_members(bill_committee)
+        bill_meetings = get_committee_meetings(bill_committee["bills_committee_url_chi"], bill_committee["internal_key"])
+        all_meetings += bill_meetings
         description = get_bill_content(bill)
-        
+        description = ""
         bills.append(bill)
         readings.append(bill_reading)
         committee_members += [{'internal_key': bill['internal_key'], 'member_name': k, 'individual': mapping.get(k, -1), 'pos': i} for i, k in enumerate(member_names)]
         committees.append(bill_committee)
         descriptions.append({'internal_key': bill['internal_key'], 'description': description})
         sleep(0.5)
-    return bills, readings, descriptions, committees, committee_members
+    return bills, readings, descriptions, committees, committee_members, all_meetings
 
 mapping = get_individuals()
+#get_committee_meetings("https://www.legco.gov.hk/yr18-19/chinese/bc/bc53/general/bc53.htm", "")
+#print("Answer", get_bill_content({"bill_content_url_chi": "http://www.legco.gov.hk/yr12-13/english/bills/b201301251.pdf"}))
 
-for year in range(2016, 2021):
+for year in range(2013, 2016):
     print("Year: %d" % year)
-    bills, readings, descriptions, committees, committee_members = get_bills(mapping, year)
-    upsert_records('legco', 'Bill', bills, returning_keys=['internal_key'])
-    upsert_records('legco', 'BillReading', readings, returning_keys=['internal_key'])
-    upsert_records('legco', 'BillDescription', descriptions, returning_keys=['internal_key'])
-    upsert_records('legco', 'BillCommittee', committees, returning_keys=['internal_key'])
+    bills, readings, descriptions, committees, committee_members, meetings = get_bills(mapping, year)
+    upsert_records('legco', 'Bill', bills, returning_keys=['internal_key'], update_columns=bill_keys)
+    upsert_records('legco', 'BillReading', readings, returning_keys=['internal_key'], update_columns=bill_reading_keys)
+    upsert_records('legco', 'BillDescription', descriptions, returning_keys=['internal_key'], update_columns=['description'])
+    upsert_records('legco', 'BillCommittee', committees, returning_keys=['internal_key'], update_columns=bill_committee_keys)
     for bill in bills:
         delete_committee_member_by_internal_key(bill["internal_key"])
+        delete_meeting_by_internal_key(bill["internal_key"])
     upsert_records('legco', 'BillCommitteeMember', committee_members, returning_keys=['internal_key'])
+    upsert_records('legco', 'BillMeeting', meetings, returning_keys=['internal_key'], update_columns=bill_meeting_keys)
     print_memory()
