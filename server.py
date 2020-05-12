@@ -136,7 +136,7 @@ query MyQuery {
 
 @app.route("/legco/members/", defaults={'sortkey': 'id', 'sortorder': 'asc'})
 @app.route("/legco/members/<string:sortkey>/", defaults={'sortorder': 'asc'})
-@app.route("/legco/members/<string:sortkey>/<string:sortorder/")
+@app.route("/legco/members/<string:sortkey>/<string:sortorder>/")
 def all_members_statistics(sortkey, sortorder):
     search_functions = {
         'id': lambda member: member['id'],
@@ -335,7 +335,7 @@ query MyQuery {
         }
      for d, stats in summary.items()]
 
-      attendanceRate = [
+    attendanceRate = [
         {d: 100 - stats.get('ABSENT', 0) /(stats.get('ABSTAIN', 0) + stats.get('ABSENT', 0)+stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0))
         }
      for d, stats in summary.items()]
