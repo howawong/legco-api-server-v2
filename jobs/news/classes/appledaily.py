@@ -10,10 +10,16 @@ import multiprocessing
 import json
 import hashlib
 from .graphql import run_query
+import sys
 
+
+class NullDevice():
+    def write(self, s):
+        pass
 
 def fetch(item):
     msg = ""
+    print("Parsing %s" % item["link"])
     try:
         r = requests.get(item["link"])
         r.encoding = "utf-8"
@@ -29,7 +35,10 @@ def fetch(item):
                 script_text = s.string
         text = ""
         if script_text is not None:
+            orig = sys.stderr
+            sys.stderr = NullDevice()
             tree = JavascriptParser().parse(script_text)
+            sys.stderr = orig
             for node in nodevisitor.visit(tree):
                 if not isinstance(node, ast.Assign):
                     continue

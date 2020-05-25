@@ -1,0 +1,13 @@
+### 1. Get Linux
+FROM python:3.6.4
+RUN mkdir -p app
+WORKDIR /app
+COPY . /app
+RUN pip install -r requirements.txt
+ENV ENDPOINT=$ENDPOINT
+ENV ADMIN_SECRET=$ADMIN_SECRET
+ENV TELEGRAM_CHANNEL_ID=$TELEGRAM_CHANNEL_ID
+ENV TELEGRAM_TOKEN=$TELEGRAM_TOKEN
+ENV CMD=$CMD
+ENV JOB_NAME=$JOB_NAME
+CMD ["python", "/app/run.py"]
