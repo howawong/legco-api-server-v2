@@ -37,7 +37,9 @@ def fetch_apple_daily(rundate):
 warnings.filterwarnings("ignore")
 completed = False
 try:
-    fetch_apple_daily("2020-04-13")
+    today = datetime.datetime.now().strftime("%Y-%m-%d")
+    print(today)
+    fetch_apple_daily(today)
     completed = True
 except Exception as e:
     traceback.print_exc()
