@@ -11,6 +11,24 @@ import json
 import hashlib
 from .graphql import run_query
 import sys
+import os
+
+
+def get_memory():
+    """ Look up the memory usage, return in MB. """
+    proc_file = '/proc/{}/status'.format(os.getpid())
+    scales = {'KB': 1024.0, 'MB': 1024.0 * 1024.0}
+    with open(proc_file, 'rU') as f:
+        for line in f:
+            if 'VmHWM:' in line:
+                fields = line.split()
+                size = int(fields[1])
+                scale = fields[2].upper()
+                return size*scales[scale]/scales['MB']
+    return 0.0
+
+def print_memory():
+    print("Peak: %f MB" % (get_memory()))
 
 
 class NullDevice():
@@ -52,6 +70,7 @@ def fetch(item):
         raise
     item["source"] = "appledaily"
     item["key"] =  hashlib.md5(item["link"].encode()).hexdigest()
+    print_memory()
     return item
 
 
