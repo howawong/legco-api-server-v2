@@ -13,6 +13,20 @@ from pdfminer.pdfinterp import PDFResourceManager
 from pdfminer.pdfinterp import PDFPageInterpreter
 from pdfminer.converter import PDFPageAggregator
 from urllib.parse import urljoin
+import urllib
+import traceback
+
+
+def send_to_telegram(status):
+    TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+    JOB_NAME = os.getenv("JOB_NAME")
+    text = "Job %s is %s" % (JOB_NAME, status)
+    qs = urllib.parse.urlencode({'chat_id': os.getenv("TELEGRAM_CHANNEL_ID"), 'text': text})
+    url = "https://api.telegram.org/bot%s/sendMessage?%s" % (os.getenv("TELEGRAM_TOKEN"), qs)   
+    print(url)
+    print(requests.post(url).json())
+
+
 
 
 def get_memory():
@@ -279,16 +293,24 @@ mapping = get_individuals()
 #get_committee_meetings("https://www.legco.gov.hk/yr18-19/chinese/bc/bc53/general/bc53.htm", "")
 #print("Answer", get_bill_content({"bill_content_url_chi": "http://www.legco.gov.hk/yr12-13/english/bills/b201301251.pdf"}))
 
-for year in range(2013, 2016):
-    print("Year: %d" % year)
-    bills, readings, descriptions, committees, committee_members, meetings = get_bills(mapping, year)
-    upsert_records('legco', 'Bill', bills, returning_keys=['internal_key'], update_columns=bill_keys)
-    upsert_records('legco', 'BillReading', readings, returning_keys=['internal_key'], update_columns=bill_reading_keys)
-    upsert_records('legco', 'BillDescription', descriptions, returning_keys=['internal_key'], update_columns=['description'])
-    upsert_records('legco', 'BillCommittee', committees, returning_keys=['internal_key'], update_columns=bill_committee_keys)
-    for bill in bills:
-        delete_committee_member_by_internal_key(bill["internal_key"])
-        delete_meeting_by_internal_key(bill["internal_key"])
-    upsert_records('legco', 'BillCommitteeMember', committee_members, returning_keys=['internal_key'])
-    upsert_records('legco', 'BillMeeting', meetings, returning_keys=['internal_key'], update_columns=bill_meeting_keys)
+completed = False
+try:
     print_memory()
+    for year in range(2013, 2020):
+        print("Year: %d" % year)
+        bills, readings, descriptions, committees, committee_members, meetings = get_bills(mapping, year)
+        upsert_records('legco', 'Bill', bills, returning_keys=['internal_key'], update_columns=bill_keys)
+        upsert_records('legco', 'BillReading', readings, returning_keys=['internal_key'], update_columns=bill_reading_keys)
+        upsert_records('legco', 'BillDescription', descriptions, returning_keys=['internal_key'], update_columns=['description'])
+        upsert_records('legco', 'BillCommittee', committees, returning_keys=['internal_key'], update_columns=bill_committee_keys)
+        for bill in bills:
+            delete_committee_member_by_internal_key(bill["internal_key"])
+            delete_meeting_by_internal_key(bill["internal_key"])
+        upsert_records('legco', 'BillCommitteeMember', committee_members, returning_keys=['internal_key'])
+        upsert_records('legco', 'BillMeeting', meetings, returning_keys=['internal_key'], update_columns=bill_meeting_keys)
+    print_memory()
+    completed = True
+
+except Exception as e:
+    traceback.print_exc()
+send_to_telegram("completed" if completed else "error")

@@ -10,6 +10,24 @@ import urllib
 import traceback
 
 
+def get_memory():
+    """ Look up the memory usage, return in MB. """
+    proc_file = '/proc/{}/status'.format(os.getpid())
+    scales = {'KB': 1024.0, 'MB': 1024.0 * 1024.0}
+    with open(proc_file, 'rU') as f:
+        for line in f:
+            if 'VmHWM:' in line:
+                fields = line.split()
+                size = int(fields[1])
+                scale = fields[2].upper()
+                return size*scales[scale]/scales['MB']
+    return 0.0
+
+def print_memory():
+    print("Peak: %f MB" % (get_memory()))
+
+
+
 def send_to_telegram(status):
     TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
     JOB_NAME = os.getenv("JOB_NAME")
@@ -39,7 +57,9 @@ completed = False
 try:
     today = datetime.datetime.now().strftime("%Y-%m-%d")
     print(today)
+    print_memory()
     fetch_apple_daily(today)
+    print_memory()
     completed = True
 except Exception as e:
     traceback.print_exc()

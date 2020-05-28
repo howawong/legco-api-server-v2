@@ -13,7 +13,35 @@ from datetime import datetime, timedelta
 from apiclient import discovery
 from google.oauth2 import service_account
 import base64
+import traceback
 
+
+def get_memory():
+    """ Look up the memory usage, return in MB. """
+    proc_file = '/proc/{}/status'.format(os.getpid())
+    scales = {'KB': 1024.0, 'MB': 1024.0 * 1024.0}
+    with open(proc_file, 'rU') as f:
+        for line in f:
+            if 'VmHWM:' in line:
+                fields = line.split()
+                size = int(fields[1])
+                scale = fields[2].upper()
+                return size*scales[scale]/scales['MB']
+    return 0.0 
+
+
+def print_memory():
+    print("Peak: %f MB" % (get_memory()))
+
+
+def send_to_telegram(status):
+    TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+    JOB_NAME = os.getenv("JOB_NAME")
+    text = "Job %s is %s" % (JOB_NAME, status)
+    qs = urllib.parse.urlencode({'chat_id': os.getenv("TELEGRAM_CHANNEL_ID"), 'text': text})
+    url = "https://api.telegram.org/bot%s/sendMessage?%s" % (os.getenv("TELEGRAM_TOKEN"), qs)   
+    print(url)
+    print(requests.post(url).json())
 
 
 def run_query(query):
@@ -57,7 +85,6 @@ def upload_to_google_sheet(bills):
     service = discovery.build("sheets", "v4", credentials=credentials)
 
     spreadsheet_id = os.getenv("SPREADSHEET_ID")
-    print(spreadsheet_id)
     sheet_name = "Master"
     range_name = "%s!A2:BR%d" % (sheet_name, len(output_rows) + 1)
     values = output_rows
@@ -82,5 +109,14 @@ def get_bills():
     return bills
  
 
-bills = get_bills()
-upload_to_google_sheet(bills)
+completed = False
+try:
+    print_memory()
+    bills = get_bills()
+    upload_to_google_sheet(bills)
+    print_memory()
+    completed = True
+except Exception as e:
+    traceback.print_exc()
+send_to_telegram("completed" if completed else "error")
+

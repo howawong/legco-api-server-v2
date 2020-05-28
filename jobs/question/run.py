@@ -9,6 +9,37 @@ from lxml import etree
 import hashlib
 import re
 from lxml.html.clean import Cleaner
+import urllib
+import traceback
+
+
+def get_memory():
+    """ Look up the memory usage, return in MB. """
+    proc_file = '/proc/{}/status'.format(os.getpid())
+    scales = {'KB': 1024.0, 'MB': 1024.0 * 1024.0}
+    with open(proc_file, 'rU') as f:
+        for line in f:
+            if 'VmHWM:' in line:
+                fields = line.split()
+                size = int(fields[1])
+                scale = fields[2].upper()
+                return size*scales[scale]/scales['MB']
+    return 0.0
+
+def print_memory():
+    print("Peak: %f MB" % (get_memory()))
+
+
+
+
+def send_to_telegram(status):
+    TELEGRAM_TOKEN = os.getenv("TELEGRAM_TOKEN")
+    JOB_NAME = os.getenv("JOB_NAME")
+    text = "Job %s is %s" % (JOB_NAME, status)
+    qs = urllib.parse.urlencode({'chat_id': os.getenv("TELEGRAM_CHANNEL_ID"), 'text': text})
+    url = "https://api.telegram.org/bot%s/sendMessage?%s" % (os.getenv("TELEGRAM_TOKEN"), qs)   
+    print(url)
+    print(requests.post(url).json())
 
 
 def check_existence(key):
@@ -276,9 +307,18 @@ def crawl(year=0):
         else:
             print('Already uploaded')
 
-now = datetime.now()
-year = now.year
-month = now.month
-if month < 10:
-    year = year - 1
-crawl(year)
+completed = False
+try:
+    print_memory()
+    now = datetime.now()
+    year = now.year
+    month = now.month
+    if month < 10:
+        year = year - 1
+    crawl(year)
+    print_memory()
+    completed = True
+except Exception as e:
+    traceback.print_exc()
+send_to_telegram("completed" if completed else "error")
+
