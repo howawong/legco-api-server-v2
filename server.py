@@ -3,6 +3,7 @@ import requests
 import click
 import datetime
 import os
+from .jobs.news.classes.graphql import *
 from dotenv import find_dotenv, load_dotenv
 
 
@@ -10,7 +11,7 @@ dotenv_path = os.getenv('ENV_FILE', os.path.join(os.path.dirname(__file__), '.en
 load_dotenv(dotenv_path)
 
 app = Flask(__name__)
-
+app.config["JSONIFY_PRETTYPRINT_REGULAR"] = True 
 
 @app.route("/budget/meeting/<int:year>/")
 def budget_meeting(year):
@@ -194,7 +195,7 @@ query MyQuery {
     
     # Fill in data from legco_Individual
     for individual in individuals:
-        if individual[id] in members_statistics:
+        if individual['id'] in members_statistics:
             members_statistics[individual["id"]].update({
                 "id": individual["id"],
                 "name_zh": individual["name_ch"],
@@ -367,3 +368,46 @@ def bill_categories():
     ]
     output = [{'id': d[0], 'title_zh': d[1], 'title_en': d[2], 'avatar': d[3]} for d in data]
     return jsonify(output)
+
+
+@app.route("/legco/bills/")
+def bills():
+    query = """
+query MyQuery {
+  legco_Bill {
+    bill_gazette_date
+    bill_title_chi
+    bill_title_eng
+    internal_key
+    tag {
+      categories
+      keywords
+    }
+    ordinance_gazette_date
+    ordinance_gazette_content_url_chi
+    meeting {
+      date
+    }
+    reading {
+      first_reading_date
+      second_reading_date
+      third_reading_date
+    }
+  }
+}
+"""
+    r = run_query(query)["data"]["legco_Bill"]
+    output = [ {
+        "bill_gazette_date": b["bill_gazette_date"],
+        "bill_title_chi": b["bill_title_chi"],
+        "bill_title_eng": b["bill_title_eng"],
+        "internal_key": b["internal_key"],
+        "categories": b["tag"]["categories"],
+        "internal_key": b["internal_key"],
+        "meeting": [z["date"] for z in b["meeting"]],
+        "first_reading": b["reading"]["first_reading_date"],
+        "second_reading": b["reading"]["second_reading_date"],
+        "third_reading": b["reading"]["third_reading_date"]
+    }
+    for b in r]
+    return jsonify(r)
