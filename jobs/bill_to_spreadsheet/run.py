@@ -16,6 +16,46 @@ import base64
 import traceback
 
 
+def upsert_records(schema, table, records, returning_keys=[], update_columns=[]):
+    if len(records) == 0:
+        return
+    first_record = records[0]
+    template = "{{\n"
+    for key, value in first_record.items():
+        if type(value) in [list, dict] or value is None:
+            continue
+        line = "            {0}:{1}{{{0}}}{1}".format(key, "\"" if type(value) == str else "")
+        template += line + ",\n"
+    template += "           }}"
+    #print(template)
+    for r in records:
+        for k in r.keys():
+            v = r[k]
+            if type(v) == bool:
+                v = str(v).lower()
+                r[k] = v
+    records = ",\n".join([template.format(**r) for r in records])
+    records = "[%s]" % records
+    returning = "\n".join(returning_keys)
+    update = "\n".join(update_columns)
+    query = """
+mutation MyQuery {
+  insert_%s_%s(
+     objects: %s,
+     on_conflict: {constraint: %s_pkey,update_columns: [%s]}
+  ){
+     affected_rows
+     returning {
+       %s
+     }
+  }
+}
+""" % (schema, table, records, table, update, returning)
+    return run_query(query)
+
+
+
+
 def get_memory():
     """ Look up the memory usage, return in MB. """
     proc_file = '/proc/{}/status'.format(os.getpid())
@@ -96,6 +136,28 @@ def upload_to_google_sheet(bills):
     service.spreadsheets().values().update(spreadsheetId=spreadsheet_id, body=data, range=range_name, valueInputOption="USER_ENTERED").execute()
 
 
+def get_bill_tags():
+    base64_credentials = os.getenv("GOOGLE_CRED", "")
+    decoded_credentials = base64.b64decode(base64_credentials)
+    info = json.loads(decoded_credentials)
+
+    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    credentials = service_account.Credentials.from_service_account_info(info, scopes=scopes)
+    service = discovery.build("sheets", "v4", credentials=credentials)
+
+    spreadsheet_id = os.getenv("SPREADSHEET_ID")
+    sheet_name = "Master"
+    sheet = service.spreadsheets()
+    spreadsheet_id = os.getenv("SPREADSHEET_ID")
+    range_name = "%s!A2:D" % (sheet_name)
+    result = sheet.values().get(spreadsheetId=spreadsheet_id, range=range_name).execute()
+    values = result.get('values', [])
+    tags = [{"internal_key": v[0], "categories": v[1], "keywords": v[2]} for v in values]
+    return tags
+
+   
+
+
 def get_bills():
     individual_query = """
     query MyQuery {
@@ -113,7 +175,9 @@ completed = False
 try:
     print_memory()
     bills = get_bills()
-    upload_to_google_sheet(bills)
+    #upload_to_google_sheet(bills)
+    tags = get_bill_tags()
+    upsert_records('legco', 'BillTag', tags, returning_keys=['internal_key'], update_columns=["categories", "keywords"])
     print_memory()
     completed = True
 except Exception as e:
