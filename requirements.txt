@@ -4,3 +4,4 @@ click==7.0
 slimit==0.8.1
 beautifulsoup4==4.8.2
 python-dotenv==0.10.3
+flask-cors==3.0.8

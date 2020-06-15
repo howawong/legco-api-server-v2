@@ -5,6 +5,7 @@ import datetime
 import os
 from .jobs.news.classes.graphql import *
 from dotenv import find_dotenv, load_dotenv
+from flask_cors import CORS
 
 
 dotenv_path = os.getenv('ENV_FILE', os.path.join(os.path.dirname(__file__), '.env'))
@@ -12,6 +13,7 @@ load_dotenv(dotenv_path)
 
 app = Flask(__name__)
 app.config["JSONIFY_PRETTYPRINT_REGULAR"] = True 
+CORS(app)
 
 @app.route("/budget/meeting/<int:year>/")
 def budget_meeting(year):
