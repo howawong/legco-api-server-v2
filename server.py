@@ -175,7 +175,7 @@ def all_members_statistics(sortkey, sortorder):
     elif sortorder not in ['asc', 'desc']:
         return jsonify({})
     year = 2016
-    start_date = "2019-05-01"
+    start_date = "2019-10-01"
     query = \
 """
 query MyQuery {
@@ -247,7 +247,7 @@ query MyQuery {
     # Generate vote_summary from legco_IndividualVote
     vote_summary = {}
     for vote in votes:
-        d = vote["Meeting"]["date"][0:-3] + "-01 00:00:00"
+        d = vote["Meeting"]["date"][0:-3] + "-01"
         # meeting = vote["Meeting"]["id"]
         result = vote["result"]
         # vote_number = vote["vote_number"]
@@ -261,22 +261,21 @@ query MyQuery {
     # Fill in data from vote_summary
     for i in members_statistics:
         if not vote_summary.get(i, {}):
-            members_statistics[i]['vote_rate'] = []
-            members_statistics[i]['attendance_rate'] = []
+            members_statistics[i]['stats'] = []
         else:
             d = max(vote_summary[i])
             stats = vote_summary[i][d]
-            members_statistics[i]['vote_rate'] = [
-                {d:{
+            members_statistics[i]['stats'] = [
+                {   'date': d,
                     'vote_count': stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0),
-                    'no_vote_count': stats.get('ABSTAIN', 0) + stats.get('ABSENT', 0)
-                }}
-            ]
-            members_statistics[i]['attendance_rate'] = [
-                {d:{
+                    'yes_count': stats.get('YES', 0),
+                    'no_count': stats.get('NO', 0),
+                    'present_count': stats.get('PRESENT', 0),
+                    'abstain_count': stats.get('ABSTAIN', 0),
+                    'absent_count': stats.get('ABSENT', 0),
+                    'no_vote_count': stats.get('ABSTAIN', 0) + stats.get('ABSENT', 0),
                     'present_count': stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0) + stats.get('ABSTAIN', 0),
-                    'absent_count': stats.get('ABSENT', 0)
-                }}
+                }
             ]
     output = sorted(members_statistics.values(), key = search_functions.get(sortkey), reverse = sortorder == 'desc')
     return jsonify(output)
@@ -284,7 +283,7 @@ query MyQuery {
 @app.route("/legco/member/<int:member_id>/")
 def member_statistics(member_id):
     year = 2016
-    start_date = "2018-05-01"
+    start_date = "2019-10-01"
     query = \
 """
 query MyQuery {
@@ -337,36 +336,25 @@ query MyQuery {
     } for vote in votes]
     summary = {}
     for vote in votes:
-        d = vote["date"]
+        d = vote["date"].split(' ')[0]
         result = vote["result"]
         if d not in summary:
             summary[d] = {}
         summary[d][result] = summary[d].get(result, 0) + 1
-    vote_rate = [
-        {d:{
-            'vote_count': stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0),
-            'no_vote_count': stats.get('ABSTAIN', 0) + stats.get('ABSENT', 0)
-        }}
-     for d, stats in summary.items()]
-
-    attendance_rate = [
-        {d:{
-            'present_count': stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0) + stats.get('ABSTAIN', 0),
-            'absent_count': stats.get('ABSENT', 0)
-        }}
-     for d, stats in summary.items()]
-
-    voteRate = [
-        {d:(stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0))/ (stats.get('ABSTAIN', 0) + stats.get('ABSENT', 0)+stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0))
+    stats = [
+        {'date': d,
+        'vote_count': stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0),
+        'yes_count': stats.get('YES', 0),
+        'no_count': stats.get('NO', 0),
+        'present_count': stats.get('PRESENT', 0),
+        'abstain_count': stats.get('ABSTAIN', 0),
+        'absent_count': stats.get('ABSENT', 0),
+        'no_vote_count': stats.get('ABSTAIN', 0) + stats.get('ABSENT', 0),
+        'attendance_rate': 1.0 - stats.get('ABSENT', 0) /(stats.get('ABSTAIN', 0) + stats.get('ABSENT', 0)+stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0)),
+        'vote_rate': (stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0))/ (stats.get('ABSTAIN', 0) + stats.get('ABSENT', 0)+stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0)),
         }
-     for d, stats in summary.items()]
-
-    attendanceRate = [
-        {d: 100 - stats.get('ABSENT', 0) /(stats.get('ABSTAIN', 0) + stats.get('ABSENT', 0)+stats.get('YES', 0) + stats.get('NO', 0) + stats.get('PRESENT', 0))
-        }
-     for d, stats in summary.items()]
-
-
+        for d, stats in summary.items()
+    ]
     individual = data["legco_Individual"][0]
     council_member = data["legco_CouncilMembers"][0]
     output = {}
@@ -377,11 +365,7 @@ query MyQuery {
     output["constituency_type"] = council_member["CouncilMembershipType"]["category"]
     output["constituency_district"] = council_member["CouncilMembershipType"]["sub_category"]
     output["political_affiliation"] = individual["Party"]["name_short_ch"]
-    output["attendance_rate"] = attendance_rate
-    output["vote_rate"] = vote_rate
-    # attendanceRate and voteRate are in %
-    output["attendanceRate"] = attendanceRate
-    output["voteRate"] = voteRate
+    output["stats"] = stats
     return jsonify(output)
 
 @app.route("/legco/bill_categories/")
