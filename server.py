@@ -91,6 +91,7 @@ query MyQuery {
   legco_IndividualNews(where: {Individual: {id: {_eq: %d}}}, order_by: {News: {date: desc}}, limit: 20) {
     News {
       date
+      source
       image
       link
       title
