@@ -12,6 +12,7 @@ import hashlib
 from .graphql import run_query
 import sys
 import os
+import json
 
 
 def get_memory():
@@ -68,6 +69,7 @@ def fetch(item):
     except Exception as e:
         print("cannot parse %s" % (item["link"]))
         raise
+    item["text"] = json.dumps(item["text"])[1:-1]
     item["source"] = "appledaily"
     item["key"] =  hashlib.md5(item["link"].encode()).hexdigest()
     print_memory()

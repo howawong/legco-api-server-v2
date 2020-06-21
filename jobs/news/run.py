@@ -8,6 +8,7 @@ import os
 import requests
 import urllib
 import traceback
+from datetime import timedelta, date
 
 
 def get_memory():
@@ -45,7 +46,8 @@ def fetch_apple_daily(rundate):
     print("Fetched %d articles" % (len(appledaily_articles)))
     print(upsert_news(appledaily_articles))
     print("Finding related articles")
-    print(update_individual_news(appledaily_articles))
+    result = update_individual_news(appledaily_articles)
+    print(result)
     before = datetime.datetime.strptime(rundate,"%Y-%m-%d") - datetime.timedelta(weeks = 2)
     before = before.strftime("%Y-%m-%d")
     print("Updating like counts from %s" % (before))
@@ -54,14 +56,36 @@ def fetch_apple_daily(rundate):
 
 warnings.filterwarnings("ignore")
 completed = False
-try:
-    today = datetime.datetime.now().strftime("%Y-%m-%d")
-    print(today)
-    print_memory()
-    fetch_apple_daily(today)
-    print_memory()
-    completed = True
-except Exception as e:
-    traceback.print_exc()
-send_to_telegram("completed" if completed else "error")
+message = ""
+
+
+def daterange(start_date, end_date):
+    if start_date is None:
+        yield end_date
+    else:
+        for n in range(int ((end_date - start_date).days)):
+            yield start_date + timedelta(n)
+
+backfill = False
+
+start_date = None
+end_date = datetime.datetime.now().strftime("%Y-%m-%d")
+
+if backfill:
+    start_date = date(2020, 6, 1)
+    end_date = date(2020, 6, 18)
+
+for single_date in daterange(start_date, end_date):
+    print(single_date)
+    try:
+        today = single_date
+        print(today)
+        print_memory()
+        fetch_apple_daily(today)
+        print_memory()
+        completed = True
+    except Exception as e:
+        message = str(e)
+        traceback.print_exc()
+    send_to_telegram("completed" if completed else "error %s" % (message))
 
