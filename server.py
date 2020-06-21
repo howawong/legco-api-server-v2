@@ -6,6 +6,8 @@ import os
 from .jobs.news.classes.graphql import *
 from dotenv import find_dotenv, load_dotenv
 from flask_cors import CORS
+import datetime 
+from datetime import timedelta, date
 
 
 dotenv_path = os.getenv('ENV_FILE', os.path.join(os.path.dirname(__file__), '.env'))
@@ -103,6 +105,40 @@ query MyQuery {
 """ % (member)
     r = [r["News"] for r in run_query(query)["data"]["legco_IndividualNews"]]
     return jsonify(r)
+
+
+@app.route("/legco/member_news/<int:member>/<int:page_size>/<int:page>/")
+def member_news_paginated(member, page_size, page):
+    past_3_months = datetime.datetime.now() - timedelta(days=180)
+    past_3_months = past_3_months.strftime("%Y-%m-%d")
+    if page < 1:
+        page = 1
+    query = \
+"""
+query MyQuery {
+  legco_IndividualNews(where: {Individual: {id: {_eq: %d}}, News: {date: {_gte: "%s"}}}, order_by: {News: {date: desc}}, limit: %d, offset: %d) {
+    News {
+      date
+      source
+      image
+      link
+      title
+      key
+    }
+  }
+  legco_IndividualNews_aggregate(where: {Individual: {id: {_eq: %d}}, News: {date: {_gte: "%s"}}}, order_by: {News: {date: desc}}) {
+    aggregate {
+      count
+    }
+  }
+}
+""" % (member, past_3_months, page_size, (page - 1) * page_size, member, past_3_months)
+    result =  run_query(query)
+    news = result["data"]["legco_IndividualNews"]
+    total = result["data"]["legco_IndividualNews_aggregate"]["aggregate"]["count"]
+    r = [r["News"] for r in news]
+    return jsonify({"news": r, "pagination": {"total": total, "page_size": page_size, "page": page }})
+
 
 
 @app.route("/legco/member_news_by_name/<string:name_ch>/")
