@@ -12,7 +12,8 @@ dotenv_path = os.getenv('ENV_FILE', os.path.join(os.path.dirname(__file__), '.en
 load_dotenv(dotenv_path)
 
 app = Flask(__name__)
-app.config["JSONIFY_PRETTYPRINT_REGULAR"] = True 
+app.config["JSONIFY_PRETTYPRINT_REGULAR"] = True
+app.url_map.strict_slashes = False
 CORS(app)
 
 @app.route("/budget/meeting/<int:year>/")
@@ -71,14 +72,14 @@ query MyQuery {
         if key not in news:
             news[key] = {}
             news[key]["members"] = []
-        news[key].update(engagement)   
-        news[key].update(orig_news)   
-    
+        news[key].update(engagement)
+        news[key].update(orig_news)
+
     for j in r:
         orig_news = j["News"]
         key = orig_news["key"]
         individual = j["member"]
-        news[key]["members"].append(individual)       
+        news[key]["members"].append(individual)
     output = sorted([v for k, v in news.items()], key=lambda x: x["engagement"], reverse=True)[0:10]
     return jsonify(output)
 
@@ -187,7 +188,7 @@ query MyQuery {
     individuals = data["legco_Individual"]
     council_members = data["legco_CouncilMembers"]
     members_statistics = {}
-    
+
     # Fill in data from legco_CouncilMembers
     for council_member in council_members:
         members_statistics[council_member["member"]] = {
@@ -195,7 +196,7 @@ query MyQuery {
             "constituency_type": council_member["CouncilMembershipType"]["category"],
             "constituency_district": council_member["CouncilMembershipType"]["sub_category"],
         }
-    
+
     # Fill in data from legco_Individual
     for individual in individuals:
         if individual['id'] in members_statistics:
@@ -206,7 +207,7 @@ query MyQuery {
                 "avatar": individual["image"],
                 "political_affiliation": individual["Party"]["name_short_ch"] if individual["Party"] else None,
             })
-    
+
     # Generate vote_summary from legco_IndividualVote
     vote_summary = {}
     for vote in votes:
@@ -220,7 +221,7 @@ query MyQuery {
         if d not in vote_summary[individual]:
             vote_summary[individual][d] = {}
         vote_summary[individual][d][result] = vote_summary[individual][d].get(result, 0) + 1
-    
+
     # Fill in data from vote_summary
     for i in members_statistics:
         if not vote_summary.get(i, {}):
